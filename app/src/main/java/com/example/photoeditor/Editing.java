@@ -1,16 +1,10 @@
 package com.example.photoeditor;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-
-import android.content.ContentUris;
-import android.content.Context;
+import android.Manifest;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Intent;
-import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
@@ -19,12 +13,10 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
@@ -35,16 +27,19 @@ import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Objects;
 
 public class Editing extends AppCompatActivity {
 
@@ -54,7 +49,7 @@ public class Editing extends AppCompatActivity {
     Boolean toStart = true;
     Button saveBtn;
     EditText editTextCaption;
-    FileOutputStream outputStream=null;
+   // FileOutputStream outputStream=null;
 
 
 
@@ -130,24 +125,17 @@ public class Editing extends AppCompatActivity {
                         processedBitmap = ProcessingBitmap(newBitmap);
                         k = processedBitmap;
                         // Bitmap processedBitmap1 = ProcessingBitmap1();
-                        if (processedBitmap != null) {
-                            image.setImageBitmap(processedBitmap);
-                            Toast.makeText(getApplicationContext(),"Done",Toast.LENGTH_SHORT).show();
-
-                        } else {
-                            Toast.makeText(getApplicationContext(),"Something Went Wrong in  processing",Toast.LENGTH_SHORT).show();
-                        }
                     } else {
-                        Bitmap processedBitmap = ProcessingBitmap(bitmap);
+                        processedBitmap = ProcessingBitmap(bitmap);
                         // Bitmap processedBitmap1 = ProcessingBitmap1();
-                        if (processedBitmap != null) {
-                            image.setImageBitmap(processedBitmap);
-                            Toast.makeText(getApplicationContext(),"Done",Toast.LENGTH_SHORT).show();
 
-                        } else {
-                            Toast.makeText(getApplicationContext(),"Something Went Wrong in  processing",Toast.LENGTH_SHORT).show();
-                        }
+                    }
+                    if (processedBitmap != null) {
+                        image.setImageBitmap(processedBitmap);
+                        Toast.makeText(getApplicationContext(),"Done",Toast.LENGTH_SHORT).show();
 
+                    } else {
+                        Toast.makeText(getApplicationContext(),"Something Went Wrong in  processing",Toast.LENGTH_SHORT).show();
                     }
 
 
@@ -162,13 +150,17 @@ public class Editing extends AppCompatActivity {
             }
         });
 
+        ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},1);
+        ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},1);
+
         saveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                BitmapDrawable drawable = (BitmapDrawable) image.getDrawable();
+               BitmapDrawable drawable = (BitmapDrawable) image.getDrawable();
                 Bitmap bitmap = drawable.getBitmap();
+                saveImageToGallery(bitmap);
 
-                File filePath = Environment.getExternalStorageDirectory();
+               /* File filePath = Environment.getExternalStorageDirectory();
                 File dir = new File(filePath.getAbsolutePath() + "/Photo Editor");
                 dir.mkdir();
                 String fileName = String.format("%d.jpg",System.currentTimeMillis());
@@ -194,9 +186,34 @@ public class Editing extends AppCompatActivity {
                     e.printStackTrace();
                 }
 
+                //saveToGallery(); */
 
             }
         });
+
+    }
+
+    private void saveImageToGallery(Bitmap bitmap) {
+        OutputStream fos;
+        try {
+            if (Build.VERSION.SDK_INT>= Build.VERSION_CODES.Q){
+                ContentResolver resolver = getContentResolver();
+                ContentValues contentValues = new ContentValues();
+                contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME,"Image_"+ ".jpg");
+                contentValues.put(MediaStore.MediaColumns.MIME_TYPE,"image/jpeg");
+                contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + File.separator + "PhotoEditor");
+                Uri imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,contentValues);
+
+                fos = resolver.openOutputStream(Objects.requireNonNull(imageUri));
+                bitmap.compress(Bitmap.CompressFormat.JPEG,100,fos);
+                Objects.requireNonNull(fos);
+
+
+                Toast.makeText(this,"Image Saved",Toast.LENGTH_SHORT).show();
+            }
+        }catch (Exception e){
+            Toast.makeText(this,"Image Not Saved \n" + e.getMessage(),Toast.LENGTH_SHORT).show();
+        }
 
     }
 
@@ -252,10 +269,7 @@ public class Editing extends AppCompatActivity {
     }
 
     private Bitmap ProcessingBitmap(Bitmap original){
-        Bitmap newBitmap;
-
-
-
+            Bitmap newBitmap;
             newBitmap = Bitmap.createBitmap(original.getWidth(),original.getHeight(),Bitmap.Config.ARGB_8888);
             Canvas newCanvas = new Canvas(newBitmap);
 
@@ -279,10 +293,42 @@ public class Editing extends AppCompatActivity {
             } else {
                 Toast.makeText(getApplicationContext(),"Caption Empty",Toast.LENGTH_SHORT).show();
             }
-        return newBitmap;
+            return newBitmap;
 
 
+            }
+
+  /*  private void saveToGallery(){
+        BitmapDrawable bitmapDrawable = (BitmapDrawable) image.getDrawable();
+        Bitmap bitmap = bitmapDrawable.getBitmap();
+
+        FileOutputStream outputStream = null;
+        File file = Environment.getExternalStorageDirectory();
+        File dir = new File(file.getAbsolutePath() + "/MyPics");
+        dir.mkdir();
+
+        String fileName = String.format("%d.jpg",System.currentTimeMillis());
+
+        File outFile = new File(dir,fileName);
+        try {
+            outputStream = new FileOutputStream(outFile);
+        } catch (Exception e){
+            e.printStackTrace();
         }
+        bitmap.compress(Bitmap.CompressFormat.JPEG,100,outputStream);
+        try {
+            assert outputStream != null;
+            outputStream.flush();
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        try {
+            outputStream.close();
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+
+    } */
 
 
 
